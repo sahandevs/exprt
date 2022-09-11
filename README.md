@@ -1,16 +1,12 @@
 <center>
+<p align="center">
 
 <img src="./logo.png" width="300">
 
-_An expert in expressions!_
-
-
-## ⚠ Work in progress ⚠
-
+</p>
 </center>
-
-
-
+<p align="center">An expert in expressions!</p>
+<h2 align="center">⚠ Work in progress ⚠</h2>
 
 
 ### Design Goals
@@ -22,7 +18,6 @@ _An expert in expressions!_
 - supports [wirefilter](https://github.com/cloudflare/wirefilter) syntax which itself is based on [wireshark](https://www.wireshark.org/) filter syntax.
 - execute other expressions when doing async work
 - **easily** embeddable in other languages (current target: go, PHP, typescript, python)
-- a syntax which both supports non-programmers (sysadmins) and power users (SRE)
 - everything is idempotent and side-effect free by default
 - if a user writes an unoptimized code, compile and optimize it to the optimized version. if the compiler knows a code is not optimized, it should just compile it to the optimized version instead of showing a message to user.
 - all values are inferred. no dynamic functions or values
