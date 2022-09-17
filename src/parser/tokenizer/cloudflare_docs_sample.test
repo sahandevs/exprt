@@ -294,7 +294,7 @@ http.request.headers.names[*] == "Content-Type"
 `.`:Dot
 `names`:Ident
 `[`:BracketOpen
-`*`:Star
+`*`:OpMul
 `]`:BracketClose
 `=`:OpEq
 `"Content-Type"`:String
@@ -311,7 +311,7 @@ any(http.request.headers.names[*] == "Content-Type")
 `.`:Dot
 `names`:Ident
 `[`:BracketOpen
-`*`:Star
+`*`:OpMul
 `]`:BracketClose
 `=`:OpEq
 `"Content-Type"`:String
@@ -377,11 +377,11 @@ any(url_decode(http.request.body.form.values[*])[*] contains "an xss attack")
 `.`:Dot
 `values`:Ident
 `[`:BracketOpen
-`*`:Star
+`*`:OpMul
 `]`:BracketClose
 `)`:ParClose
 `[`:BracketOpen
-`*`:Star
+`*`:OpMul
 `]`:BracketClose
 `contains`:OpContains
 `"an xss attack"`:String

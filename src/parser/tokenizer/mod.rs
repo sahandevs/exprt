@@ -1,9 +1,5 @@
 //! Tokenizer for the language
-//!
-//! ### Why write a tokenizer by hand instead of using parser/lexer generators?
-//!
-//! TODO:
-use std::{iter::Enumerate, ops::RangeInclusive, str::Chars};
+use std::{fmt::Display, iter::Enumerate, ops::RangeInclusive, str::Chars};
 
 use peekmore::{PeekMore, PeekMoreIterator};
 
@@ -15,7 +11,7 @@ pub struct Tokenizer<'i> {
 }
 
 /// Token kind
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Token {
     /// '==' | 'eq'
     OpEq,
@@ -81,8 +77,6 @@ pub enum Token {
     Number,
     /// 'not' | '!'
     Not,
-    /// '*'
-    Star,
     /// '.'
     Dot,
     /// '$'
@@ -94,6 +88,7 @@ pub enum Token {
 }
 
 /// A section or view of the expression
+#[derive(Debug, Clone)]
 pub struct Span {
     /// type of section
     pub kind: Token,
@@ -122,12 +117,20 @@ pub enum TokenizerErrorType {
 }
 
 /// Reason of the tokenizer failure
+#[derive(Debug)]
 pub struct TokenizerError {
     /// Actual reason
     pub kind: TokenizerErrorType,
     /// character range that have caused this error
     pub range: RangeInclusive<usize>,
 }
+
+impl Display for TokenizerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.kind)
+    }
+}
+impl std::error::Error for TokenizerError {}
 
 type Item = Result<Span, TokenizerError>;
 
@@ -152,7 +155,6 @@ impl<'i> std::iter::Iterator for Tokenizer<'i> {
             return None;
         }
         self.skip_whitespace()?;
-
         while let Some((i, next_char)) = self.stream.peek().copied() {
             self.stream.reset_cursor();
             macro_rules! emit {
@@ -203,7 +205,7 @@ impl<'i> std::iter::Iterator for Tokenizer<'i> {
                 '{' => emit!(BraceOpen),
                 '}' => emit!(BraceClose),
                 '$' => emit!(Dollar),
-                '*' => emit!(Star),
+                '*' => emit!(OpMul),
                 '+' => emit!(OpAdd),
                 '%' => emit!(OpMod),
                 ':' => {
@@ -378,7 +380,7 @@ impl<'i> Tokenizer<'i> {
                     }
                 }};
             }
-            match (state.clone(), c) {
+            match (state, c) {
                 (Number, '.') => {
                     consume!(to DecimalNumber
                              if |next| { next.is_numeric() }
@@ -441,30 +443,22 @@ impl<'i> Tokenizer<'i> {
         }
 
         match state {
-            Number | DecimalNumber => {
-                return Some(Ok(Span {
-                    kind: Token::Number,
-                    range: start..=end,
-                }))
-            }
-            Ipv4 => {
-                return Some(Ok(Span {
-                    kind: Token::IPv4,
-                    range: start..=end,
-                }))
-            }
-            Ipv4Cidr => {
-                return Some(Ok(Span {
-                    kind: Token::Ipv4Cidr,
-                    range: start..=end,
-                }))
-            }
-            IncompleteIpv4 => {
-                return Some(Err(TokenizerError {
-                    kind: TokenizerErrorType::IncompleteIpv4,
-                    range: start..=end,
-                }))
-            }
+            Number | DecimalNumber => Some(Ok(Span {
+                kind: Token::Number,
+                range: start..=end,
+            })),
+            Ipv4 => Some(Ok(Span {
+                kind: Token::IPv4,
+                range: start..=end,
+            })),
+            Ipv4Cidr => Some(Ok(Span {
+                kind: Token::Ipv4Cidr,
+                range: start..=end,
+            })),
+            IncompleteIpv4 => Some(Err(TokenizerError {
+                kind: TokenizerErrorType::IncompleteIpv4,
+                range: start..=end,
+            })),
         }
     }
 
@@ -497,14 +491,14 @@ impl<'i> Tokenizer<'i> {
                 _ => break,
             }
         }
-        return Some(Ok(Span {
+        Some(Ok(Span {
             kind: if in_cidr {
                 Token::Ipv6Cidr
             } else {
                 Token::Ipv6
             },
             range: start..=end,
-        }));
+        }))
     }
 
     fn parse_op(&mut self) -> Option<Item> {

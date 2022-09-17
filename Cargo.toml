@@ -14,3 +14,4 @@ keywords = ["scripting", "scripting-engine", "scripting-language", "embeddable"]
 
 [dependencies]
 peekmore = { version = "1.0.0", features = ["smallvec"] }
+thiserror = "1.0"

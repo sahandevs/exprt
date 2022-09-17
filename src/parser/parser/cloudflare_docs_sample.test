@@ -1,0 +1,111 @@
+http.request.uri.path matches "/autodiscover\.(xml|src)$"
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+((http.request.uri.path) matches ("/autodiscover\.(xml|src)$"))
+###############################
+host eq "www.example.com" and not cf.edge.server_port in {80 443}
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(((host) == ("www.example.com")) && (not ((cf.edge.server_port) in ({ (80) (443) }))))
+###############################
+http.request.uri.path eq "/articles/2008/"
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+((http.request.uri.path) == ("/articles/2008/"))
+###############################
+ip.src ne 93.184.216.0
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+((ip.src) != (93.184.216.0))
+###############################
+cf.threat_score lt 10
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+((cf.threat_score) < (10))
+###############################
+cf.threat_score le 20
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+((cf.threat_score) <= (20))
+###############################
+cf.threat_score gt 25
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+((cf.threat_score) > (25))
+###############################
+cf.threat_score ge 60
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+((cf.threat_score) >= (60))
+###############################
+http.request.uri.path contains "/articles/"
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+((http.request.uri.path) contains ("/articles/"))
+###############################
+http.request.uri.path matches "^/articles/200[7-8]/$"
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+((http.request.uri.path) matches ("^/articles/200[7-8]/$"))
+###############################
+ip.src in { 93.184.216.0 93.184.216.1/3 }
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+((ip.src) in ({ (93.184.216.0) (93.184.216.1/3) }))
+###############################
+not ( http.host eq "www.cloudflare.com" and ip.src in 93.184.216.0/24 ) 
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(not (((http.host) == ("www.cloudflare.com")) && ((ip.src) in (93.184.216.0/24))))
+###############################
+http.host eq "www.cloudflare.com" and ip.src in 93.184.216.0/24
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(((http.host) == ("www.cloudflare.com")) && ((ip.src) in (93.184.216.0/24)))
+###############################
+http.host eq "www.cloudflare.com" xor ip.src in 93.184.216.0/24
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(((http.host) == ("www.cloudflare.com")) ^ ((ip.src) in (93.184.216.0/24)))
+###############################
+http.host eq "www.cloudflare.com" or ip.src in 93.184.216.0/24
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(((http.host) == ("www.cloudflare.com")) || ((ip.src) in (93.184.216.0/24)))
+###############################
+(
+ (http.host eq "api.example.com" and http.request.uri.path eq "/api/v2/auth") or
+ (http.host matches "^(www|store|blog)\.example.com" and http.request.uri.path contains "wp-login.php") or
+ ip.geoip.country in {"CN" "TH" "US" "ID" "KR" "MY" "IT" "SG" "GB"} or ip.geoip.asnum in {12345 54321 11111}
+) and not ip.src in {11.22.33.0/24}
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(((((((http.host) == ("api.example.com")) && (http.request.uri.path)) == ("/api/v2/auth")) || (((http.host) matches ("^(www|store|blog)\.example.com")) && ((http.request.uri.path) contains ("wp-login.php")))) || (((ip.geoip.country) in ({ ("CN") ("TH") ("US") ("ID") ("KR") ("MY") ("IT") ("SG") ("GB") })) || ((ip.geoip.asnum) in ({ (12345) (54321) (11111) })))) && (not ((ip.src) in ({ (11.22.33.0/24) }))))
+###############################
+"^(www|store|blog)\.example\.com"
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+("^(www|store|blog)\.example\.com")
+###############################
+(http.request.uri.query contains "token-type=\"JWT\"")
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+((http.request.uri.query) contains ("token-type=\"JWT\""))
+###############################
+ssl
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(ssl)
+###############################
+not ssl
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(not (ssl))
+###############################
+http.request.headers.names[*] == "Content-Type"
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(((http.request.headers.names)[*]) == ("Content-Type"))
+###############################
+any(http.request.headers.names[*] == "Content-Type")
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(any((((http.request.headers.names)[*]) == ("Content-Type"))))
+###############################
+(ip.src in $office_network)
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+((ip.src) in ($office_network))
+###############################
+lower(http.host) == "www.cloudflare.com"
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+((lower((http.host))) == ("www.cloudflare.com"))
+###############################
+to_string(cf.bot_management.score) == '5'
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+((to_string((cf.bot_management.score))) == ('5'))
+###############################
+to_string(ssl) == 'true'
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+((to_string((ssl))) == ('true'))
+###############################
+any(url_decode(http.request.body.form.values[*])[*] contains "an xss attack")
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(any((((url_decode(((http.request.body.form.values)[*])))[*]) contains ("an xss attack"))))
