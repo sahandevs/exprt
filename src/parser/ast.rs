@@ -1,3 +1,5 @@
+use crate::typecheck::typecheck;
+
 pub use super::tokenizer::Span;
 
 /// Optional index syntax for fields.
@@ -5,8 +7,6 @@ pub use super::tokenizer::Span;
 ///   - req.headers["content-type"]
 #[derive(Debug)]
 pub enum Index {
-    /// a.b
-    None,
     /// a.b[*]
     Star,
     /// a.b["test"]
@@ -81,7 +81,7 @@ pub enum Atom {
 
 /// An expression that can be resulted to a value
 #[derive(Debug)]
-pub enum Expr {
+pub enum ExprKind {
     /// see [`Atom`]
     Atom(Atom),
     /// see [`Field`]
@@ -188,4 +188,19 @@ pub enum Expr {
     /// Example:
     ///   - req.ip in { 1.2.3.4   2.3.4.5  }
     In(Box<Expr>, Box<Expr>),
+}
+
+#[derive(Debug)]
+pub struct Expr {
+    pub r#type: typecheck::Type,
+    pub inner: ExprKind,
+}
+
+impl From<ExprKind> for Expr {
+    fn from(inner: ExprKind) -> Self {
+        Self {
+            r#type: typecheck::Type::Unknown,
+            inner,
+        }
+    }
 }

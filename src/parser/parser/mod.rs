@@ -227,7 +227,7 @@ impl Span {
     fn to_expr(&self, lhs: ast::Expr, rhs: ast::Expr) -> Result<ast::Expr> {
         macro_rules! op {
             ($name: ident) => {
-                ast::Expr::$name(Box::new(lhs), Box::new(rhs))
+                ast::ExprKind::$name(Box::new(lhs), Box::new(rhs))
             };
         }
         let x = match self.kind {
@@ -252,7 +252,7 @@ impl Span {
             Token::OpMod => op!(Mod),
             _ => return Err(ParseError::InternalError),
         };
-        Ok(x)
+        Ok(x.into())
     }
 }
 
@@ -287,10 +287,11 @@ fn parse_function_call(state: &mut State, chain: Vec<Span>) -> Result<ast::Expr>
         params.push(expr);
     }
 
-    Ok(ast::Expr::FunctionCall(FunctionCall {
+    Ok(ast::ExprKind::FunctionCall(FunctionCall {
         name: chain,
         params,
-    }))
+    })
+    .into())
 }
 
 fn parse_field_or_function_call(state: &mut State) -> Result<ast::Expr> {
@@ -314,7 +315,7 @@ fn parse_field_or_function_call(state: &mut State) -> Result<ast::Expr> {
         }
     }
 
-    Ok(ast::Expr::Field(ast::Field { chain }))
+    Ok(ast::ExprKind::Field(ast::Field { chain }).into())
 }
 
 fn parse_dynamic_field(state: &mut State) -> Result<ast::Expr> {
@@ -322,7 +323,8 @@ fn parse_dynamic_field(state: &mut State) -> Result<ast::Expr> {
 
     if let Some(next) = state.pop_front() {
         if matches!(next.kind, Token::Ident) {
-            return Ok(ast::Expr::DynamicField(next));
+            // TODO: support $a.b
+            return Ok(ast::ExprKind::DynamicField(next).into());
         } else {
             return Err(ParseError::ExpectedAnIdentFound(next));
         }
@@ -359,7 +361,7 @@ fn parse_shortest_expr(state: &mut State) -> Result<ast::Expr> {
         Token::Not => {
             state.pop_front().unwrap(); // pop the "not" token
             let expr = parse_expr(state)?;
-            ast::Expr::Not(Box::new(expr))
+            ast::ExprKind::Not(Box::new(expr)).into()
         }
         Token::BraceOpen => {
             let opening = state.pop_front().unwrap(); // pop the "}" token
@@ -381,17 +383,18 @@ fn parse_shortest_expr(state: &mut State) -> Result<ast::Expr> {
                 return Err(ParseError::ExpectedClosingBraceButFoundEOF { opening });
             }
             let closing = state.pop_front().unwrap();
-            ast::Expr::Array {
+            ast::ExprKind::Array {
                 elements: exprs,
                 start: opening,
                 end: closing,
             }
+            .into()
         }
         Token::Ident => parse_field_or_function_call(state)?,
         Token::Dollar => parse_dynamic_field(state)?,
         _ => {
             let atom = parse_atom(state)?;
-            ast::Expr::Atom(atom)
+            ast::ExprKind::Atom(atom).into()
         }
     };
 
@@ -419,10 +422,11 @@ fn parse_shortest_expr(state: &mut State) -> Result<ast::Expr> {
                 // i was lazy here. TODO: fix this
                 found: opening,
             })?;
-        return Ok(ast::Expr::Indexed(Indexed {
+        return Ok(ast::ExprKind::Indexed(Indexed {
             expr: Box::new(expr),
             kind: index,
-        }));
+        })
+        .into());
     }
 
     Ok(expr)
@@ -477,22 +481,24 @@ pub fn parse(expr: &str) -> Result<ast::Expr> {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use std::ops::RangeInclusive;
+
+    use crate::typecheck::typecheck::Type;
 
     use super::*;
 
-    fn ast_to_text_verbose(ast: &ast::Expr, input: &str) -> String {
-        use ast::Expr::*;
+    pub fn ast_to_text_verbose(ast: &ast::Expr, input: &str) -> String {
+        use ast::ExprKind::*;
 
         macro_rules! binary {
             ($lhs:ident, $op:literal, $rhs:ident) => {{
-                let lhs = ast_to_text_verbose($lhs, input);
-                let rhs = ast_to_text_verbose($rhs, input);
+                let lhs = ast_to_text_verbose(&$lhs, input);
+                let rhs = ast_to_text_verbose(&$rhs, input);
                 format!("{} {} {}", lhs, $op, rhs)
             }};
         }
-        let r = match ast {
+        let r = match &ast.inner {
             Atom(
                 ast::Atom::Ipv4(x)
                 | ast::Atom::Ipv4Cidr(x)
@@ -532,7 +538,7 @@ mod tests {
                 format!("{{ {} }}", elements)
             }
             Not(x) => {
-                format!("not {}", ast_to_text_verbose(x, input))
+                format!("not {}", ast_to_text_verbose(&x, input))
             }
             DynamicField(x) => format!("${}", &input[x.range.clone()]),
             BitwiseAnd(lhs, rhs) => binary!(lhs, "&", rhs),
@@ -556,7 +562,6 @@ mod tests {
             In(lhs, rhs) => binary!(lhs, "in", rhs),
             Indexed(x) => {
                 let rest = match &x.kind {
-                    ast::Index::None => "".to_string(),
                     ast::Index::Star => "[*]".to_string(),
                     ast::Index::Expr(x) => format!("[{}]", ast_to_text_verbose(&x, input)),
                 };
@@ -564,7 +569,11 @@ mod tests {
             }
         };
 
-        format!("({})", r)
+        if let Type::Unknown = ast.r#type {
+            format!("({})", r)
+        } else {
+            format!("(<{}: {:?}>)", r, ast.r#type)
+        }
     }
 
     fn test_suit(name: &str) {

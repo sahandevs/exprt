@@ -1,0 +1,111 @@
+http.request.uri.path matches "/autodiscover\.(xml|src)$"
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(<(<http.request.uri.path: String>) matches (<"/autodiscover\.(xml|src)$": ConstRegex>): Bool>)
+###############################
+host eq "www.example.com" and not cf.edge.server_port in {80 443}
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(<(<(<host: String>) == (<"www.example.com": ConstString>): Bool>) && (<not (<(<cf.edge.server_port: Integer>) in (<{ (<80: ConstInteger>) (<443: ConstInteger>) }: Array(Integer)>): Bool>): Bool>): Bool>)
+###############################
+http.request.uri.path eq "/articles/2008/"
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(<(<http.request.uri.path: String>) == (<"/articles/2008/": ConstString>): Bool>)
+###############################
+ip.src ne 93.184.216.0
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(<(<ip.src: IP>) != (<93.184.216.0: ConstIpv4>): Bool>)
+###############################
+cf.threat_score lt 10
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(<(<cf.threat_score: Integer>) < (<10: ConstInteger>): Bool>)
+###############################
+cf.threat_score le 20
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(<(<cf.threat_score: Integer>) <= (<20: ConstInteger>): Bool>)
+###############################
+cf.threat_score gt 25
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(<(<cf.threat_score: Integer>) > (<25: ConstInteger>): Bool>)
+###############################
+cf.threat_score ge 60
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(<(<cf.threat_score: Integer>) >= (<60: ConstInteger>): Bool>)
+###############################
+http.request.uri.path contains "/articles/"
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(<(<http.request.uri.path: String>) contains (<"/articles/": ConstString>): Bool>)
+###############################
+http.request.uri.path matches "^/articles/200[7-8]/$"
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(<(<http.request.uri.path: String>) matches (<"^/articles/200[7-8]/$": ConstRegex>): Bool>)
+###############################
+ip.src in { 93.184.216.0 93.184.216.1/3 }
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(<(<ip.src: IP>) in (<{ (<93.184.216.0: ConstIpv4>) (<93.184.216.1/3: ConstIpv4Cidr>) }: Array(Ipv4Cidr)>): Bool>)
+###############################
+not ( http.host eq "www.cloudflare.com" and ip.src in 93.184.216.0/24 ) 
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(<not (<(<(<http.host: String>) == (<"www.cloudflare.com": ConstString>): Bool>) && (<(<ip.src: IP>) in (<93.184.216.0/24: ConstIpv4Cidr>): Bool>): Bool>): Bool>)
+###############################
+http.host eq "www.cloudflare.com" and ip.src in 93.184.216.0/24
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(<(<(<http.host: String>) == (<"www.cloudflare.com": ConstString>): Bool>) && (<(<ip.src: IP>) in (<93.184.216.0/24: ConstIpv4Cidr>): Bool>): Bool>)
+###############################
+http.host eq "www.cloudflare.com" xor ip.src in 93.184.216.0/24
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(<(<(<http.host: String>) == (<"www.cloudflare.com": ConstString>): Bool>) ^ (<(<ip.src: IP>) in (<93.184.216.0/24: ConstIpv4Cidr>): Bool>): Bool>)
+###############################
+http.host eq "www.cloudflare.com" or ip.src in 93.184.216.0/24
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(<(<(<http.host: String>) == (<"www.cloudflare.com": ConstString>): Bool>) || (<(<ip.src: IP>) in (<93.184.216.0/24: ConstIpv4Cidr>): Bool>): Bool>)
+###############################
+(
+ (http.host eq "api.example.com" and http.request.uri.path eq "/api/v2/auth") or
+ (http.host matches "^(www|store|blog)\.example.com" and http.request.uri.path contains "wp-login.php") or
+ ip.geoip.country in {"CN" "TH" "US" "ID" "KR" "MY" "IT" "SG" "GB"} or ip.geoip.asnum in {12345 54321 11111}
+) and not ip.src in {11.22.33.0/24}
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(<(<(<(<(<(<(<http.host: String>) == (<"api.example.com": ConstString>): Bool>) && (<http.request.uri.path: String>): Bool>) == (<"/api/v2/auth": ConstString>): Bool>) || (<(<(<http.host: String>) matches (<"^(www|store|blog)\.example.com": ConstRegex>): Bool>) && (<(<http.request.uri.path: String>) contains (<"wp-login.php": ConstString>): Bool>): Bool>): Bool>) || (<(<(<ip.geoip.country: String>) in (<{ (<"CN": ConstString>) (<"TH": ConstString>) (<"US": ConstString>) (<"ID": ConstString>) (<"KR": ConstString>) (<"MY": ConstString>) (<"IT": ConstString>) (<"SG": ConstString>) (<"GB": ConstString>) }: Array(String)>): Bool>) || (<(<ip.geoip.asnum: Integer>) in (<{ (<12345: ConstInteger>) (<54321: ConstInteger>) (<11111: ConstInteger>) }: Array(Integer)>): Bool>): Bool>): Bool>) && (<not (<(<ip.src: IP>) in (<{ (<11.22.33.0/24: ConstIpv4Cidr>) }: Array(ConstIpv4Cidr)>): Bool>): Bool>): Bool>)
+###############################
+"^(www|store|blog)\.example\.com"
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(<"^(www|store|blog)\.example\.com": ConstString>)
+###############################
+(http.request.uri.query contains "token-type=\"JWT\"")
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(<(<http.request.uri.query: String>) contains (<"token-type=\"JWT\"": ConstString>): Bool>)
+###############################
+ssl
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(<ssl: Bool>)
+###############################
+not ssl
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(<not (<ssl: Bool>): Bool>)
+###############################
+http.request.headers.names[*] == "Content-Type" <---------- FIXME: tricky expressions start here!:
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(((http.request.headers.names)[*]) == ("Content-Type"))
+###############################
+any(http.request.headers.names[*] == "Content-Type")
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(any((((http.request.headers.names)[*]) == ("Content-Type"))))
+###############################
+(ip.src in $office_network)
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+((ip.src) in ($office_network))
+###############################
+lower(http.host) == "www.cloudflare.com"
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+((lower((http.host))) == ("www.cloudflare.com"))
+###############################
+to_string(cf.bot_management.score) == '5'
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+((to_string((cf.bot_management.score))) == ('5'))
+###############################
+to_string(ssl) == 'true'
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+((to_string((ssl))) == ('true'))
+###############################
+any(url_decode(http.request.body.form.values[*])[*] contains "an xss attack")
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+(any((((url_decode(((http.request.body.form.values)[*])))[*]) contains ("an xss attack"))))
