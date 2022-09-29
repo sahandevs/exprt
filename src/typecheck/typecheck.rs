@@ -1,4 +1,4 @@
-use std::ops::RangeInclusive;
+use std::{collections::HashMap, ops::RangeInclusive};
 
 use super::schema::Schema;
 use crate::parser::ast::{self, ExprKind};
@@ -31,6 +31,10 @@ pub enum TypeCheckError {
 
     #[error("could not parse regex")]
     CouldNotParseRegex(#[from] regex::Error),
+
+    // TODO: this is a temporary catch-all generic related error.
+    #[error("invalid generic usage: {0}")]
+    InvalidGenericUsage(String),
 }
 
 #[derive(Default, Clone)]
@@ -58,6 +62,9 @@ pub enum Type {
     Regex,
     Array(Box<Type>),
     Map(Box<Type>, Box<Type>),
+    Option(Box<Type>),
+    Iterator(Box<Type>),
+    Generic(usize),
 }
 
 impl std::fmt::Debug for Type {
@@ -83,8 +90,11 @@ impl std::fmt::Debug for Type {
             Self::Ipv4Cidr => write!(f, "Ipv4Cidr"),
             Self::Ipv6Cidr => write!(f, "Ipv6Cidr"),
             Self::Regex => write!(f, "Regex"),
+            Self::Option(arg0) => write!(f, "Option({:?})", arg0),
             Self::Array(arg0) => write!(f, "Array({:?})", arg0),
+            Self::Iterator(arg0) => write!(f, "Iterator({:?})", arg0),
             Self::Map(l, r) => write!(f, "Map({:?}, {:?})", l, r),
+            Self::Generic(x) => write!(f, "T{}", x),
         }
     }
 }
@@ -118,6 +128,100 @@ impl Type {
             _ => None,
         }
     }
+
+    pub fn is_generic(&self) -> bool {
+        match self {
+            Type::Array(a) => a.is_generic(),
+            Type::Map(a, b) => a.is_generic() || b.is_generic(),
+            Type::Option(a) => a.is_generic(),
+            Type::Iterator(a) => a.is_generic(),
+            Type::Generic(_) => true,
+            _ => false,
+        }
+    }
+
+    fn replace_generic(&self, n: usize, t: Type) -> Type {
+        match self {
+            Type::Array(a) => Type::Array(Box::new(a.replace_generic(n, t))),
+            Type::Map(a, b) => Type::Map(
+                Box::new(a.replace_generic(n, t.clone())),
+                Box::new(b.replace_generic(n, t)),
+            ),
+            Type::Option(a) => Type::Option(Box::new(a.replace_generic(n, t))),
+            Type::Iterator(a) => Type::Iterator(Box::new(a.replace_generic(n, t))),
+            Type::Generic(x) => {
+                if *x == n {
+                    t
+                } else {
+                    self.clone()
+                }
+            }
+            x => x.clone(),
+        }
+    }
+
+    fn try_find_generic_types(
+        &self,
+        other: &Type,
+        storage: &mut HashMap<usize, Type>,
+    ) -> Result<(), TypeCheckError> {
+        match (self, other) {
+            (Type::Array(a) | Type::Option(a), Type::Array(b) | Type::Option(b))
+                if a.is_generic() || b.is_generic() =>
+            {
+                a.try_find_generic_types(b, storage)?;
+            }
+            (Type::Option(a), Type::Option(b)) if a.is_generic() || b.is_generic() => {
+                a.try_find_generic_types(b, storage)?;
+            }
+            (Type::Iterator(a), Type::Iterator(b)) if a.is_generic() || b.is_generic() => {
+                a.try_find_generic_types(b, storage)?;
+            }
+            (Type::Map(aa, ab), Type::Map(ba, bb))
+                if aa.is_generic() || ab.is_generic() || ba.is_generic() || bb.is_generic() =>
+            {
+                aa.try_find_generic_types(aa, storage)?;
+                ab.try_find_generic_types(bb, storage)?;
+            }
+            (Type::Generic(n), other) | (other, Type::Generic(n)) => {
+                if let Some(x) = storage.insert(*n, other.clone()) {
+                    return Err(TypeCheckError::InvalidGenericUsage(format!(
+                        "generic parameter {} type can't be both {:?} and {:?}",
+                        n, x, other
+                    )));
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    pub fn try_expand_generic(
+        &self,
+        args: &[Type],
+        params: &[Type],
+    ) -> Result<Type, TypeCheckError> {
+        let mut generic_types = HashMap::new();
+
+        for (arg, par) in args.iter().zip(params) {
+            arg.try_find_generic_types(par, &mut generic_types)?;
+        }
+
+        let mut r_type = self.clone();
+
+        for (n, t) in generic_types {
+            r_type = r_type.replace_generic(n, t);
+        }
+
+        if r_type.is_generic() {
+            return Err(TypeCheckError::InvalidGenericUsage(format!(
+                "cannot expand type of {:?} from args({:?}) and params({:?}",
+                self, args, params
+            )));
+        }
+
+        Ok(r_type)
+    }
 }
 
 impl PartialEq for Type {
@@ -133,6 +237,10 @@ impl PartialEq for Type {
             (Self::ConstRegex(l0), Self::ConstRegex(r0)) => l0.as_str() == r0.as_str(),
             (Self::Array(l0), Self::Array(r0)) => l0 == r0,
             (Self::Map(l0, l1), Self::Map(r0, r1)) => l0 == r0 && l1 == r1,
+            (Self::Option(l0), Self::Option(r0)) => l0 == r0,
+            (Self::Iterator(l0), Self::Iterator(r0)) => l0 == r0,
+            (Self::Generic(_), _) => true,
+            (_, Self::Generic(_)) => true,
             _ => core::mem::discriminant(self) == core::mem::discriminant(other),
         }
     }
@@ -176,7 +284,14 @@ pub fn infer_and_typecheck(
         ($lhs:ident, $rhs:ident) => {{
             infer_and_typecheck(input, $lhs, schema)?;
             infer_and_typecheck(input, $rhs, schema)?;
-            expr.r#type = Type::Bool;
+            // if the lhs is an iterator, binary operators like lhs == rhs
+            // is a filter over that iterator. for example http.headers[*] == "test"
+            // is equivalent to `http.headers.iter().filter(|x| x == "test")
+            if let Type::Iterator(_) = $lhs.r#type {
+                expr.r#type = $lhs.r#type.clone();
+            } else {
+                expr.r#type = Type::Bool;
+            }
         }};
     }
 
@@ -248,15 +363,27 @@ pub fn infer_and_typecheck(
             let end_idx = x.name.last().unwrap().range.end();
             let name = &input[RangeInclusive::new(*start_idx, *end_idx)];
 
-            for par in &mut x.params {
+            for par in &mut x.args {
                 infer_and_typecheck(input, par, schema)?;
             }
 
-            let params: Vec<_> = x.params.iter().map(|x| x.r#type.clone()).collect();
-            if let Some(func) = schema.find_function(name, params.as_slice()) {
-                expr.r#type = func.r_type.clone();
+            let args: Vec<_> = x.args.iter().map(|x| x.r#type.clone()).collect();
+            if let Some(func) = schema.find_function(name, args.as_slice()) {
+                if func.r_type.is_generic() {
+                    // find the actual generic type
+                    expr.r#type = func
+                        .r_type
+                        .try_expand_generic(args.as_slice(), func.par_types.as_slice())?;
+                } else {
+                    expr.r#type = func.r_type.clone();
+                }
             } else {
-                return Err(TypeCheckError::UndefinedField(name.to_string()));
+                let args: Vec<_> = args.iter().map(|x| format!("{:?}", x)).collect();
+                return Err(TypeCheckError::UndefinedFunction(format!(
+                    "{}({})",
+                    name,
+                    args.join(", ")
+                )));
             }
         }
         ExprKind::Array {
@@ -282,16 +409,20 @@ pub fn infer_and_typecheck(
         ExprKind::Indexed(x) => match &mut x.kind {
             ast::Index::Star => {
                 infer_and_typecheck(input, &mut x.expr, schema)?;
-                let val_type = match &x.expr.r#type {
-                    Type::Map(_, val_type) => val_type,
+                match &x.expr.r#type {
+                    Type::Map(_, val_type) => {
+                        expr.r#type = Type::Iterator(val_type.clone());
+                    }
+                    Type::Array(val_type) => {
+                        expr.r#type = Type::Iterator(val_type.clone());
+                    }
                     x => {
                         return Err(TypeCheckError::MismatchedType {
-                            expected: String::from("Map"),
+                            expected: String::from("Map | Array"),
                             found: x.clone(),
                         })
                     }
                 };
-                expr.r#type = Type::Array(val_type.clone());
             }
             ast::Index::Expr(index_expr) => {
                 infer_and_typecheck(input, &mut x.expr, schema)?;
@@ -381,7 +512,14 @@ mod tests {
     #[test]
     fn test_cloudflare_samples() {
         let schema = schema! {
-            functions: [],
+            functions: [
+                fn first(Iterator(T(0))) -> Option(T(0)),
+                fn first(Array(T(0))) -> Option(T(0)),
+                fn any(Iterator(T(0))) -> Bool,
+                fn any(Array(T(0))) -> Bool,
+                fn lower(String) -> String,
+                fn to_string(T(0)) -> String,
+            ],
             fields: [
                 http.request.uri.path: String,
                 host: String,
@@ -392,8 +530,10 @@ mod tests {
                 ip.geoip.asnum: Integer,
                 ip.src: Ip,
                 cf.threat_score: Integer,
+                cf.bot_management.score: Integer,
                 ssl: Bool,
-                http.request.headers.names: Array(Box::new(String))
+                http.request.headers.names: Array(String),
+                http.request.body.form.values: Array(String),
             ]
         };
         test_suit("./src/typecheck/cloudflare_docs_sample.test", &schema);

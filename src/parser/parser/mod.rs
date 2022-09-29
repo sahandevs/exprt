@@ -289,7 +289,7 @@ fn parse_function_call(state: &mut State, chain: Vec<Span>) -> Result<ast::Expr>
 
     Ok(ast::ExprKind::FunctionCall(FunctionCall {
         name: chain,
-        params,
+        args: params,
     })
     .into())
 }
@@ -518,7 +518,7 @@ pub mod tests {
                 let end_idx = x.name.last().unwrap().range.end();
                 let name = &input[RangeInclusive::new(*start_idx, *end_idx)];
                 let elements = x
-                    .params
+                    .args
                     .iter()
                     .map(|x| ast_to_text_verbose(x, input))
                     .collect::<Vec<_>>()

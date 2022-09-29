@@ -82,30 +82,40 @@ not ssl
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 (<not (<ssl: Bool>): Bool>)
 ###############################
-http.request.headers.names[*] == "Content-Type" <---------- FIXME: tricky expressions start here!:
+http.request.headers.names[*] == "Content-Type"
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-(((http.request.headers.names)[*]) == ("Content-Type"))
+(<(<(<http.request.headers.names: Array(String)>)[*]: Iterator(String)>) == (<"Content-Type": ConstString>): Iterator(String)>)
 ###############################
 any(http.request.headers.names[*] == "Content-Type")
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-(any((((http.request.headers.names)[*]) == ("Content-Type"))))
-###############################
-(ip.src in $office_network)
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-((ip.src) in ($office_network))
+(<any((<(<(<http.request.headers.names: Array(String)>)[*]: Iterator(String)>) == (<"Content-Type": ConstString>): Iterator(String)>)): Bool>)
 ###############################
 lower(http.host) == "www.cloudflare.com"
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-((lower((http.host))) == ("www.cloudflare.com"))
+(<(<lower((<http.host: String>)): String>) == (<"www.cloudflare.com": ConstString>): Bool>)
 ###############################
 to_string(cf.bot_management.score) == '5'
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-((to_string((cf.bot_management.score))) == ('5'))
+(<(<to_string((<cf.bot_management.score: Integer>)): String>) == (<'5': ConstString>): Bool>)
 ###############################
 to_string(ssl) == 'true'
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-((to_string((ssl))) == ('true'))
+(<(<to_string((<ssl: Bool>)): String>) == (<'true': ConstString>): Bool>)
 ###############################
+
+
+FIXME: if there are no exact definition for a function with an iterator parameter, we should take the inner type
+       and act as if the function is called like param.iter().map(|x| fn(x)). It's also obvious that the return type of
+       the function will change.
+
+
 any(url_decode(http.request.body.form.values[*])[*] contains "an xss attack")
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 (any((((url_decode(((http.request.body.form.values)[*])))[*]) contains ("an xss attack"))))
+###############################
+
+FIXME: for dynamic fields we should infer types like we find them in generic.
+
+(ip.src in $office_network)
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+((ip.src) in ($office_network))

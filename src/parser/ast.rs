@@ -41,7 +41,7 @@ pub struct FunctionCall {
     ///   - b()
     pub name: Vec<Span>,
     /// function parameters
-    pub params: Vec<Expr>,
+    pub args: Vec<Expr>,
 }
 
 /// Smallest unit of eval-able part that doesn't
