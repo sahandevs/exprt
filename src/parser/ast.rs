@@ -199,7 +199,7 @@ pub struct Expr {
 impl From<ExprKind> for Expr {
     fn from(inner: ExprKind) -> Self {
         Self {
-            r#type: typecheck::Type::Unknown,
+            r#type: typecheck::Type::Placeholder,
             inner,
         }
     }

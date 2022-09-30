@@ -569,7 +569,7 @@ pub mod tests {
             }
         };
 
-        if let Type::Unknown = ast.r#type {
+        if let Type::Placeholder = ast.r#type {
             format!("({})", r)
         } else {
             format!("(<{}: {:?}>)", r, ast.r#type)

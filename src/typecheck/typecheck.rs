@@ -3,6 +3,9 @@ use std::{collections::HashMap, ops::RangeInclusive};
 use super::schema::Schema;
 use crate::parser::ast::{self, ExprKind};
 
+// TODO: double check https://developers.cloudflare.com/ruleset-engine/rules-language/values/#final-notes and
+//       add tests for it.
+
 #[derive(Debug, thiserror::Error)]
 pub enum TypeCheckError {
     #[error(transparent)]
@@ -35,12 +38,16 @@ pub enum TypeCheckError {
     // TODO: this is a temporary catch-all generic related error.
     #[error("invalid generic usage: {0}")]
     InvalidGenericUsage(String),
+
+    #[error("this should be unreachable")]
+    Unreachable,
 }
 
 #[derive(Default, Clone)]
 pub enum Type {
     #[default]
-    Unknown,
+    Placeholder,
+    Infer,
     ConstString(String),
     ConstInteger(isize),
     ConstFloat(f32),
@@ -70,7 +77,8 @@ pub enum Type {
 impl std::fmt::Debug for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Unknown => write!(f, "Unknown"),
+            Self::Placeholder => write!(f, "Placeholder"),
+            Self::Infer => write!(f, "Infer"),
             Self::ConstString(_) => write!(f, "ConstString"),
             Self::ConstInteger(_) => write!(f, "ConstInteger"),
             Self::ConstFloat(_) => write!(f, "ConstFloat"),
@@ -104,7 +112,7 @@ impl Type {
         // FIXME: these conversions are temporary and probably not correct
         use Type::*;
         match (self, other) {
-            (Unknown, _) => Some(other.clone()),
+            (Placeholder, _) => Some(other.clone()),
             (ConstInteger(_), Integer)
             | (ConstString(_), String)
             | (ConstFloat(_), Float)
@@ -137,6 +145,29 @@ impl Type {
             Type::Iterator(a) => a.is_generic(),
             Type::Generic(_) => true,
             _ => false,
+        }
+    }
+
+    pub fn is_iterator(&self) -> bool {
+        match self {
+            Type::Array(a) => a.is_iterator(),
+            Type::Map(a, b) => a.is_iterator() ^ b.is_iterator(),
+            Type::Option(a) => a.is_iterator(),
+            Type::Iterator(_) => true,
+            _ => false,
+        }
+    }
+
+    /// convert inner iterator type to it's inner type
+    pub fn unwrap_iterator(&self) -> Type {
+        match self {
+            Type::Array(a) => Type::Array(Box::new(a.unwrap_iterator())),
+            Type::Map(a, b) => {
+                Type::Map(Box::new(a.unwrap_iterator()), Box::new(b.unwrap_iterator()))
+            }
+            Type::Option(a) => Type::Option(Box::new(a.unwrap_iterator())),
+            Type::Iterator(x) => *x.clone(),
+            x => x.clone(),
         }
     }
 
@@ -359,6 +390,9 @@ pub fn infer_and_typecheck(
             }
         }
         ExprKind::FunctionCall(x) => {
+            // if there are no exact definition for a function with an iterator parameter, we should take the inner type
+            // and act as if the function is called like param.iter().map(|x| fn(x)). It's also obvious that the return type of
+            // the function will change.
             let start_idx = x.name.first().unwrap().range.start();
             let end_idx = x.name.last().unwrap().range.end();
             let name = &input[RangeInclusive::new(*start_idx, *end_idx)];
@@ -378,12 +412,54 @@ pub fn infer_and_typecheck(
                     expr.r#type = func.r_type.clone();
                 }
             } else {
-                let args: Vec<_> = args.iter().map(|x| format!("{:?}", x)).collect();
-                return Err(TypeCheckError::UndefinedFunction(format!(
-                    "{}({})",
-                    name,
-                    args.join(", ")
-                )));
+                // check if one and only one of the args is an iterator.
+                let arg_iterator_count = args.iter().filter(|x| x.is_iterator()).count();
+                match arg_iterator_count {
+                    1 => {
+                        // if args are like (String, Iterator<String>, Number) convert it to (String, String, Number)
+                        // or (String, A<B<Iterator<String>>>, Number) to (String, A<B<String>>, Number)
+
+                        // TODO: there are some duplication here
+
+                        let args: Vec<_> = args.iter().map(|x| x.unwrap_iterator()).collect();
+                        if let Some(func) = schema.find_function(name, args.as_slice()) {
+                            if func.r_type.is_generic() {
+                                // find the actual generic type
+                                expr.r#type =
+                                    Type::Iterator(Box::new(func.r_type.try_expand_generic(
+                                        args.as_slice(),
+                                        func.par_types.as_slice(),
+                                    )?));
+                            } else {
+                                expr.r#type = Type::Iterator(Box::new(func.r_type.clone()));
+                            }
+                        } else {
+                            let args: Vec<_> = args.iter().map(|x| format!("{:?}", x)).collect();
+                            return Err(TypeCheckError::UndefinedFunction(format!(
+                                "{}({})",
+                                name,
+                                args.join(", ")
+                            )));
+                        }
+                    }
+                    0 => {
+                        let args: Vec<_> = args.iter().map(|x| format!("{:?}", x)).collect();
+                        return Err(TypeCheckError::UndefinedFunction(format!(
+                            "{}({})",
+                            name,
+                            args.join(", ")
+                        )));
+                    }
+                    n => {
+                        let args: Vec<_> = args.iter().map(|x| format!("{:?}", x)).collect();
+                        return Err(TypeCheckError::UndefinedFunction(format!(
+                            "{}({}). invalid usage of [*] operator. only a single iterator can be used as arg but found {}",
+                            name,
+                            args.join(", "),
+                            n
+                        )));
+                    }
+                }
             }
         }
         ExprKind::Array {
@@ -391,7 +467,7 @@ pub fn infer_and_typecheck(
             start: _,
             end: _,
         } => {
-            let mut t = Type::Unknown;
+            let mut t = Type::Placeholder;
             for e in elements {
                 infer_and_typecheck(input, e, schema)?;
                 if let Some(to) = t.try_convert_to(&e.r#type) {
@@ -413,7 +489,7 @@ pub fn infer_and_typecheck(
                     Type::Map(_, val_type) => {
                         expr.r#type = Type::Iterator(val_type.clone());
                     }
-                    Type::Array(val_type) => {
+                    Type::Array(val_type) | Type::Iterator(val_type) => {
                         expr.r#type = Type::Iterator(val_type.clone());
                     }
                     x => {
@@ -448,8 +524,10 @@ pub fn infer_and_typecheck(
                 expr.r#type = *val_type.clone();
             }
         },
-        ExprKind::DynamicField(_) => todo!(),
-
+        ExprKind::DynamicField(_) => {
+            // TODO: incomplete
+            expr.r#type = Type::Infer;
+        },
         ExprKind::BitwiseAnd(l, r) | ExprKind::BitwiseOr(l, r) => {
             infer_and_typecheck(input, l, schema)?;
             infer_and_typecheck(input, r, schema)?;
@@ -458,6 +536,7 @@ pub fn infer_and_typecheck(
             expr.r#type = Type::Integer;
         }
 
+        // TODO: incomplete:
         ExprKind::Xor(lhs, rhs) => handle_binary_op!(lhs, rhs),
         ExprKind::Add(lhs, rhs) => handle_binary_op!(lhs, rhs),
         ExprKind::Sub(lhs, rhs) => handle_binary_op!(lhs, rhs),
@@ -469,7 +548,7 @@ pub fn infer_and_typecheck(
         ExprKind::NEq(lhs, rhs) => handle_binary_op!(lhs, rhs),
     }
 
-    if let Type::Unknown = &expr.r#type {
+    if let Type::Placeholder = &expr.r#type {
         return Err(TypeCheckError::CouldNotInferTypeOfExpr);
     }
 
@@ -519,6 +598,7 @@ mod tests {
                 fn any(Array(T(0))) -> Bool,
                 fn lower(String) -> String,
                 fn to_string(T(0)) -> String,
+                fn url_decode(String) -> String,
             ],
             fields: [
                 http.request.uri.path: String,

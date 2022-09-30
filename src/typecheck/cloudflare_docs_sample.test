@@ -102,20 +102,10 @@ to_string(ssl) == 'true'
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 (<(<to_string((<ssl: Bool>)): String>) == (<'true': ConstString>): Bool>)
 ###############################
-
-
-FIXME: if there are no exact definition for a function with an iterator parameter, we should take the inner type
-       and act as if the function is called like param.iter().map(|x| fn(x)). It's also obvious that the return type of
-       the function will change.
-
-
 any(url_decode(http.request.body.form.values[*])[*] contains "an xss attack")
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-(any((((url_decode(((http.request.body.form.values)[*])))[*]) contains ("an xss attack"))))
+(<any((<(<(<url_decode((<(<http.request.body.form.values: Array(String)>)[*]: Iterator(String)>)): Iterator(String)>)[*]: Iterator(String)>) contains (<"an xss attack": ConstString>): Iterator(String)>)): Bool>)
 ###############################
-
-FIXME: for dynamic fields we should infer types like we find them in generic.
-
 (ip.src in $office_network)
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-((ip.src) in ($office_network))
+(<(<ip.src: IP>) in (<$office_network: Infer>): Bool>)
