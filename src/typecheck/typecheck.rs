@@ -527,7 +527,7 @@ pub fn infer_and_typecheck(
         ExprKind::DynamicField(_) => {
             // TODO: incomplete
             expr.r#type = Type::Infer;
-        },
+        }
         ExprKind::BitwiseAnd(l, r) | ExprKind::BitwiseOr(l, r) => {
             infer_and_typecheck(input, l, schema)?;
             infer_and_typecheck(input, r, schema)?;

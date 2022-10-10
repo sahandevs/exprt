@@ -94,6 +94,10 @@ any(http.request.headers.names[*] == "Content-Type")
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 ((ip.src) in ($office_network))
 ###############################
+(ip.src in $cf.office_network)
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+((ip.src) in ($cf.office_network))
+###############################
 lower(http.host) == "www.cloudflare.com"
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 ((lower((http.host))) == ("www.cloudflare.com"))

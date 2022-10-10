@@ -320,17 +320,29 @@ fn parse_field_or_function_call(state: &mut State) -> Result<ast::Expr> {
 
 fn parse_dynamic_field(state: &mut State) -> Result<ast::Expr> {
     state.pop_front().ok_or(ParseError::NeedToken)?; // $
+    let mut chain = vec![];
 
-    if let Some(next) = state.pop_front() {
-        if matches!(next.kind, Token::Ident) {
-            // TODO: support $a.b
-            return Ok(ast::ExprKind::DynamicField(next).into());
-        } else {
-            return Err(ParseError::ExpectedAnIdentFound(next));
+    let mut last_was_dot = true;
+    // chain part
+    while let Some(next) = state.front().clone() {
+        match next.kind {
+            Token::Dot if !last_was_dot => {
+                last_was_dot = true;
+                chain.push(state.pop_front().unwrap());
+            }
+            Token::Ident if last_was_dot => {
+                last_was_dot = false;
+                chain.push(state.pop_front().unwrap());
+            }
+            _ => break,
         }
-    } else {
+    }
+
+    if chain.is_empty() {
         return Err(ParseError::ExpectedAnIdentFoundEOF);
     }
+
+    return Ok(ast::ExprKind::DynamicField(ast::Field { chain }).into());
 }
 
 fn parse_shortest_expr(state: &mut State) -> Result<ast::Expr> {
@@ -513,6 +525,13 @@ pub mod tests {
                 let name = &input[RangeInclusive::new(*start_idx, *end_idx)];
                 format!("{}", name)
             }
+
+            DynamicField(x) => {
+                let start_idx = x.chain.first().unwrap().range.start();
+                let end_idx = x.chain.last().unwrap().range.end();
+                let name = &input[RangeInclusive::new(*start_idx, *end_idx)];
+                format!("${}", name)
+            }
             FunctionCall(x) => {
                 let start_idx = x.name.first().unwrap().range.start();
                 let end_idx = x.name.last().unwrap().range.end();
@@ -540,7 +559,6 @@ pub mod tests {
             Not(x) => {
                 format!("not {}", ast_to_text_verbose(&x, input))
             }
-            DynamicField(x) => format!("${}", &input[x.range.clone()]),
             BitwiseAnd(lhs, rhs) => binary!(lhs, "&", rhs),
             BitwiseOr(lhs, rhs) => binary!(lhs, "|", rhs),
             Xor(lhs, rhs) => binary!(lhs, "^", rhs),

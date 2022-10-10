@@ -101,7 +101,7 @@ pub enum ExprKind {
     /// see [`Indexed`]
     Indexed(Indexed),
     /// $hello
-    DynamicField(Span),
+    DynamicField(Field),
     /// Not operator
     /// Example:
     ///   - not req.ssl

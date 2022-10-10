@@ -78,7 +78,7 @@ macro_rules! schema {
                 par_types: vec![$($par),*]
             });
         )*
-        
+
         $(
             schema.fields.push($crate::typecheck::schema::FieldDef {
                 name: stringify!($($field_name).*).replace(" .", "."),
