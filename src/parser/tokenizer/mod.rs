@@ -508,22 +508,27 @@ impl<'i> Tokenizer<'i> {
         let kind = match (c, next) {
             ('!', Some('=')) => {
                 end += 1;
+                self.stream.next();
                 Token::OpNEq
             }
             ('|', Some('|')) => {
                 end += 1;
+                self.stream.next();
                 Token::OpOr
             }
             ('&', Some('&')) => {
                 end += 1;
+                self.stream.next();
                 Token::OpAnd
             }
             ('>', Some('=')) => {
                 end += 1;
+                self.stream.next();
                 Token::OpGtEq
             }
             ('<', Some('=')) => {
                 end += 1;
+                self.stream.next();
                 Token::OpLtEq
             }
             ('!', _) => Token::Not,

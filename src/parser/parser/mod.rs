@@ -51,7 +51,7 @@
 //!
 
 use std::ops::RangeInclusive;
-
+pub mod text;
 use super::ast::{self, FunctionCall, Indexed, Span};
 use super::tokenizer::{Token, Tokenizer, TokenizerError};
 use thiserror::Error;
