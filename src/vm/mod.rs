@@ -162,12 +162,12 @@ impl<T: IntoType> VM<T> {
                     let b = pop!(Integer);
                     let a = pop!(Integer);
                     push!(b + a);
-                },
+                }
                 Inst::AddFloat => {
                     let b = pop!(Float);
                     let a = pop!(Float);
                     push!(b + a);
-                },
+                }
                 Inst::ToFloat => {
                     let x = pop!(Integer);
                     push!(x as f32);

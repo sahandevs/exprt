@@ -49,42 +49,82 @@ impl Default for Type {
     }
 }
 
-#[derive(Clone)]
-pub enum Type {
-    Placeholder,
-    Infer,
-    ConstString(String),
-    ConstInteger(isize),
-    ConstFloat(f32),
-    ConstIpv4(std::net::Ipv4Addr),
-    ConstIpv6(std::net::Ipv6Addr),
-    ConstIpv4Cidr(cidr::Ipv4Cidr),
-    ConstIpv6Cidr(cidr::Ipv6Cidr),
-    ConstRegex(regex::Regex),
-    // TODO: use Const(Box<Type>)
+macro_rules! types {
+    ($($t: ident,)*) => {
+        #[derive(Clone)]
+        pub enum Type {
+            Placeholder,
+            Infer,
+
+            $($t ,)*
+
+            Const(Box<Type>),
+            Array(Box<Type>),
+            Map(Box<Type>, Box<Type>),
+            Option(Box<Type>),
+            Iterator(Box<Type>),
+            Generic(usize),
+        }
+
+        paste::paste! {
+        impl Type {
+            $(
+                pub fn [<is_ $t:snake>](&self) -> bool {
+                    match &self {
+                        Type::$t => true,
+                        Type::Const(x) if matches!(**x, Type::$t) => true,
+                        _ => false,
+                    }
+                }
+            )*
+
+            pub fn try_convert_to(&self, other: &Type) -> Option<Type> {
+                // FIXME: these conversions are temporary and probably not correct
+                $(
+                    if self.[<is_ $t:snake>]() && other.[<is_ $t:snake>]() {
+                        if self.is_const() {
+                            return Some(other.clone());
+                        } else if other.is_const() {
+                            return Some(self.clone());
+                        }
+                        return Some(other.clone());
+                    }
+                )*
+
+                if self.is_ip() && other.is_ip_cidr()
+                    || self.is_ipv4() && other.is_ipv4_cidr()
+                    || self.is_ipv6() &&  other.is_ipv6_cidr()
+                {
+                    return Some(other.clone());
+                }
+
+                if self == other {
+                    return Some(other.clone());
+                }
+
+                if matches!(self, Type::Placeholder) {
+                    return Some(other.clone());
+                }
+
+                return None;
+            }
+        }
+        }
+    };
+}
+
+types! {
     Bool,
     String,
     Integer,
     Float,
     Ip,
     IpCidr,
-    IPv4,
-    IPv6,
+    Ipv4,
+    Ipv6,
     Ipv4Cidr,
     Ipv6Cidr,
     Regex,
-    Array(Box<Type>),
-    Map(Box<Type>, Box<Type>),
-    Option(Box<Type>),
-    Iterator(Box<Type>),
-    Generic(usize),
-}
-
-impl Type {
-
-    pub fn is_string(&self) -> bool {
-        matches!(self, Type::String | Type::ConstString(_))
-    }
 }
 
 impl std::fmt::Debug for Type {
@@ -92,22 +132,14 @@ impl std::fmt::Debug for Type {
         match self {
             Self::Placeholder => write!(f, "Placeholder"),
             Self::Infer => write!(f, "Infer"),
-            Self::ConstString(_) => write!(f, "ConstString"),
-            Self::ConstInteger(_) => write!(f, "ConstInteger"),
-            Self::ConstFloat(_) => write!(f, "ConstFloat"),
-            Self::ConstIpv4(_) => write!(f, "ConstIpv4"),
-            Self::ConstIpv6(_) => write!(f, "ConstIpv6"),
-            Self::ConstIpv4Cidr(_) => write!(f, "ConstIpv4Cidr"),
-            Self::ConstIpv6Cidr(_) => write!(f, "ConstIpv6Cidr"),
-            Self::ConstRegex(_) => write!(f, "ConstRegex"),
             Self::Bool => write!(f, "Bool"),
             Self::String => write!(f, "String"),
             Self::Integer => write!(f, "Integer"),
             Self::Float => write!(f, "Float"),
-            Self::IPv4 => write!(f, "IPv4"),
+            Self::Ipv4 => write!(f, "IPv4"),
             Self::Ip => write!(f, "IP"),
             Self::IpCidr => write!(f, "IpCidr"),
-            Self::IPv6 => write!(f, "Ipv6"),
+            Self::Ipv6 => write!(f, "Ipv6"),
             Self::Ipv4Cidr => write!(f, "Ipv4Cidr"),
             Self::Ipv6Cidr => write!(f, "Ipv6Cidr"),
             Self::Regex => write!(f, "Regex"),
@@ -116,37 +148,16 @@ impl std::fmt::Debug for Type {
             Self::Iterator(arg0) => write!(f, "Iterator({:?})", arg0),
             Self::Map(l, r) => write!(f, "Map({:?}, {:?})", l, r),
             Self::Generic(x) => write!(f, "T{}", x),
+            Self::Const(x) => write!(f, "Const{:?}", x),
         }
     }
 }
 
 impl Type {
-    pub fn try_convert_to(&self, other: &Type) -> Option<Type> {
-        // FIXME: these conversions are temporary and probably not correct
-        use Type::*;
-        match (self, other) {
-            (Placeholder, _) => Some(other.clone()),
-            (ConstInteger(_), Integer)
-            | (ConstString(_), String)
-            | (ConstFloat(_), Float)
-            | (ConstIpv4(_), IPv4)
-            | (ConstIpv6(_), IPv6)
-            | (ConstIpv4Cidr(_), Ipv4Cidr)
-            | (ConstIpv6Cidr(_), Ipv6Cidr)
-            | (ConstRegex(_), Regex)
-            | (Ip, IpCidr)
-            | (IPv4, Ipv4Cidr)
-            | (IPv6, Ipv6Cidr) => Some(other.clone()),
-            (a, b) if a == b => Some(other.clone()),
-            (ConstInteger(_) | Integer, ConstInteger(_)) => Some(Integer),
-            (ConstString(_) | String, ConstString(_)) => Some(String),
-            (ConstFloat(_) | Float, ConstFloat(_)) => Some(Float),
-            (ConstIpv4(_) | IPv4, ConstIpv4(_)) => Some(IPv4),
-            (ConstIpv6(_) | IPv6, ConstIpv6(_)) => Some(IPv6),
-            (ConstIpv4(_) | ConstIpv4Cidr(_) | Ipv4Cidr, ConstIpv4Cidr(_)) => Some(Ipv4Cidr),
-            (ConstIpv6(_) | ConstIpv6Cidr(_) | Ipv6Cidr, ConstIpv6Cidr(_)) => Some(Ipv6Cidr),
-            (ConstRegex(_) | Regex, ConstRegex(_)) => Some(Regex),
-            _ => None,
+    pub fn is_const(&self) -> bool {
+        match self {
+            Type::Const(_) => true,
+            _ => false,
         }
     }
 
@@ -271,14 +282,7 @@ impl Type {
 impl PartialEq for Type {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::ConstString(l0), Self::ConstString(r0)) => l0 == r0,
-            (Self::ConstInteger(l0), Self::ConstInteger(r0)) => l0 == r0,
-            (Self::ConstFloat(l0), Self::ConstFloat(r0)) => l0 == r0,
-            (Self::ConstIpv4(l0), Self::ConstIpv4(r0)) => l0 == r0,
-            (Self::ConstIpv6(l0), Self::ConstIpv6(r0)) => l0 == r0,
-            (Self::ConstIpv4Cidr(l0), Self::ConstIpv4Cidr(r0)) => l0 == r0,
-            (Self::ConstIpv6Cidr(l0), Self::ConstIpv6Cidr(r0)) => l0 == r0,
-            (Self::ConstRegex(l0), Self::ConstRegex(r0)) => l0.as_str() == r0.as_str(),
+            (Self::Const(a), Self::Const(b)) => a == b,
             (Self::Array(l0), Self::Array(r0)) => l0 == r0,
             (Self::Map(l0, l1), Self::Map(r0, r1)) => l0 == r0 && l1 == r1,
             (Self::Option(l0), Self::Option(r0)) => l0 == r0,
@@ -292,27 +296,30 @@ impl PartialEq for Type {
 
 fn find_atom_type(input: &str, atom: &ast::Atom) -> Result<Type, TypeCheckError> {
     let t = match atom {
-        ast::Atom::StringLiteral(x) => {
-            // skip first and last character.
-            // Example data: "test", 'test'
-            let string = &input[(*x.range.start() + 1)..=(*x.range.end() - 1)];
-            Type::ConstString(string.to_owned())
-        }
+        ast::Atom::StringLiteral(_) => Type::Const(Box::new(Type::String)),
         ast::Atom::NumberLiteral(x) => {
             let num = &input[x.range.clone()];
             if num.contains(".") {
-                Type::ConstFloat(num.parse()?)
+                Type::Const(Box::new(Type::Float))
             } else {
-                Type::ConstInteger(num.parse()?)
+                Type::Const(Box::new(Type::Integer))
             }
         }
-        ast::Atom::Ipv4(x) => Type::ConstIpv4(input[x.range.clone()].parse()?),
-        ast::Atom::Ipv6(x) => Type::ConstIpv6(input[x.range.clone()].parse()?),
+        ast::Atom::Ipv4(x) => {
+            input[x.range.clone()].parse::<std::net::Ipv4Addr>()?;
+            Type::Const(Box::new(Type::Ipv4))
+        }
+        ast::Atom::Ipv6(x) => {
+            input[x.range.clone()].parse::<std::net::Ipv6Addr>()?;
+            Type::Const(Box::new(Type::Ipv6))
+        }
         ast::Atom::Ipv4Cidr(x) => {
-            Type::ConstIpv4Cidr(input[x.range.clone()].parse::<cidr::Ipv4Inet>()?.network())
+            input[x.range.clone()].parse::<cidr::Ipv4Inet>()?;
+            Type::Const(Box::new(Type::Ipv4Cidr))
         }
         ast::Atom::Ipv6Cidr(x) => {
-            Type::ConstIpv6Cidr(input[x.range.clone()].parse::<cidr::Ipv6Inet>()?.network())
+            input[x.range.clone()].parse::<cidr::Ipv6Inet>()?;
+            Type::Const(Box::new(Type::Ipv6Cidr))
         }
     };
 
@@ -344,11 +351,14 @@ pub fn infer_and_typecheck(
             {
                 #[allow(unused_imports)]
                 use Type::*;
-                if !matches!(&$expr.r#type, $(| $type)*) {
+                let expr = &$expr;
+                paste::paste!{
+                if !($( expr.r#type.[<is_ $type:snake>]() )||*) {
                     return Err(TypeCheckError::MismatchedType {
                         expected: stringify!($($type)or*).to_string(),
                         found: $expr.r#type.clone()
                     })
+                }
                 }
             }
         };
@@ -374,18 +384,15 @@ pub fn infer_and_typecheck(
         ExprKind::Contains(lhs, rhs) => handle_binary_op!(lhs, rhs),
         ExprKind::Matches(lhs, rhs) => {
             infer_and_typecheck(input, lhs, schema)?;
-            expect!(lhs => String, ConstString(_));
+            expect!(lhs => String);
             infer_and_typecheck(input, rhs, schema)?;
-            rhs.r#type = match &rhs.r#type {
-                Type::ConstString(x) => {
-                    let pattern = regex::Regex::new(x)?;
-                    Type::ConstRegex(pattern)
-                }
-                Type::String => Type::Regex,
-                x => {
+            rhs.r#type = match (rhs.r#type.is_string(), rhs.r#type.is_const()) {
+                (true, false) => Type::Regex,
+                (true, true) => Type::Const(Box::new(Type::Regex)),
+                _ => {
                     return Err(TypeCheckError::MismatchedType {
                         expected: String::from("RegexString"),
-                        found: x.clone(),
+                        found: rhs.r#type.clone(),
                     })
                 }
             };
@@ -544,8 +551,8 @@ pub fn infer_and_typecheck(
         ExprKind::BitwiseAnd(l, r) | ExprKind::BitwiseOr(l, r) => {
             infer_and_typecheck(input, l, schema)?;
             infer_and_typecheck(input, r, schema)?;
-            expect!(l => Integer, ConstInteger(_));
-            expect!(r => Integer, ConstInteger(_));
+            expect!(l => Integer);
+            expect!(r => Integer);
             expr.r#type = Type::Integer;
         }
 
