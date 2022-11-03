@@ -17,3 +17,4 @@ peekmore = { version = "1.0.0", features = ["smallvec"] }
 thiserror = "1.0"
 cidr = "0.2"
 regex = "1.6"
+bstr = "0.2"

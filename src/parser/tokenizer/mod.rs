@@ -197,6 +197,7 @@ impl<'i> std::iter::Iterator for Tokenizer<'i> {
                 }
                 '"' | '\'' => return self.parse_string(),
                 '.' => emit!(Dot),
+                ',' => emit!(Comma),
                 '^' => emit!(OpXor),
                 '(' => emit!(ParOpen),
                 ')' => emit!(ParClose),

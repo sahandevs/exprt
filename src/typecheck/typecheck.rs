@@ -43,9 +43,14 @@ pub enum TypeCheckError {
     Unreachable,
 }
 
-#[derive(Default, Clone)]
+impl Default for Type {
+    fn default() -> Self {
+        Type::Placeholder
+    }
+}
+
+#[derive(Clone)]
 pub enum Type {
-    #[default]
     Placeholder,
     Infer,
     ConstString(String),
@@ -56,6 +61,7 @@ pub enum Type {
     ConstIpv4Cidr(cidr::Ipv4Cidr),
     ConstIpv6Cidr(cidr::Ipv6Cidr),
     ConstRegex(regex::Regex),
+    // TODO: use Const(Box<Type>)
     Bool,
     String,
     Integer,
@@ -72,6 +78,13 @@ pub enum Type {
     Option(Box<Type>),
     Iterator(Box<Type>),
     Generic(usize),
+}
+
+impl Type {
+
+    pub fn is_string(&self) -> bool {
+        matches!(self, Type::String | Type::ConstString(_))
+    }
 }
 
 impl std::fmt::Debug for Type {
